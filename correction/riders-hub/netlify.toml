@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Single-page app: send every path (e.g. /join/RH-ABC123 from a QR code, or a
+# page refresh on /ride/join) to index.html instead of showing a 404.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

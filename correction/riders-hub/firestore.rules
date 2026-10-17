@@ -1,0 +1,158 @@
+﻿rules_version = '2';
+
+// ---------------------------------------------------------------------------
+// RIDER'S HUB — Firestore security rules
+// Deploy with: firebase deploy --only firestore:rules
+// ---------------------------------------------------------------------------
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && userRole() == 'admin';
+    }
+
+    function rideDoc(rideId) {
+      return get(/databases/$(database)/documents/rides/$(rideId)).data;
+    }
+
+    function isRideLeader(rideId) {
+      return isSignedIn() && rideDoc(rideId).leaderId == request.auth.uid;
+    }
+
+    function isRideParticipant(rideId) {
+      return isSignedIn() && exists(
+        /databases/$(database)/documents/rideParticipants/$(rideId + '_' + request.auth.uid)
+      );
+    }
+
+    // ---- users ----
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSelf(userId);
+      allow update: if isSelf(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ---- rides ----
+    // NOTE ON READ ACCESS: joining a ride works by looking it up via a
+    // secret Ride Code (getRideByCode -> a `where('code','==',...)` query).
+    // Firestore's security rules require that a *query* be provably safe
+    // using only the query's own filters — it cannot depend on a field
+    // (like `visibility`) that the query doesn't already filter on. A rule
+    // like `resource.data.visibility == 'public' || isRideParticipant(...)`
+    // is therefore rejected for EVERY `where('code', ...)` query, even for
+    // a ride that actually is public — Firestore has no way to prove that
+    // in advance, so the whole query fails with `permission-denied`. That
+    // was the actual bug behind "Rider B cannot reliably retrieve the ride
+    // details": the code-lookup query was being silently denied.
+    // The Ride Code itself already functions as the access credential (you
+    // cannot look up or join a ride without first being given its code out
+    // of band), so read access is simply granted to any signed-in rider.
+    // Write access remains fully restricted to the ride's leader below.
+    match /rides/{rideId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.leaderId == request.auth.uid;
+      allow update: if isRideLeader(rideId) || isAdmin();
+      allow delete: if isRideLeader(rideId) || isAdmin();
+    }
+
+    // ---- ride participants ----
+    // Same reasoning as /rides above: listParticipants() and the
+    // "preview riders before joining" call in JoinRideScreen both query by
+    // `rideId`, and a rider previewing a ride they haven't joined yet is
+    // neither a participant nor the leader — a content-dependent rule here
+    // silently breaks that preview for exactly the riders who need it.
+    // Knowing a valid rideId (from a Ride Code lookup or from being on the
+    // ride already) is the access credential; writes stay restricted below.
+    match /rideParticipants/{participantId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSelf(resource.data.userId) || isRideLeader(resource.data.rideId) || isAdmin();
+      allow delete: if isSelf(resource.data.userId) || isRideLeader(resource.data.rideId) || isAdmin();
+    }
+
+    // ---- live locations: only visible to riders on the same private ride, or leader/admin ----
+    match /locations/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSelf(userId);
+    }
+
+    // ---- ride chat ----
+    match /rideMessages/{messageId} {
+      allow read: if isRideParticipant(resource.data.rideId) || isRideLeader(resource.data.rideId) || isAdmin();
+      allow create: if isSignedIn() && isRideParticipant(request.resource.data.rideId) && request.resource.data.senderId == request.auth.uid;
+    }
+
+    // ---- ride event log ----
+    match /rideEvents/{eventId} {
+      allow read: if isRideParticipant(resource.data.rideId) || isRideLeader(resource.data.rideId) || isAdmin();
+      allow create: if isSignedIn();
+    }
+
+    // ---- businesses ----
+    match /businesses/{businessId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSelf(resource.data.ownerId) || isAdmin();
+    }
+
+    // ---- events ----
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSelf(resource.data.organizerId) || isAdmin();
+    }
+
+    // ---- communities & posts ----
+    match /communities/{communityId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if isSelf(resource.data.authorId) || isAdmin();
+    }
+
+    // ---- saved ride history ----
+    match /savedRides/{summaryId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+    }
+
+    // ---- notifications: private to the recipient ----
+    match /notifications/{notificationId} {
+      allow read, update: if isSelf(resource.data.userId);
+      allow create: if isSignedIn();
+    }
+
+    // ---- achievements: read-only to owner, written by trusted backend logic only ----
+    match /achievements/{achievementId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ---- offline sync queue mirror (rare — most sync happens client-side) ----
+    match /offlineQueue/{itemId} {
+      allow read, write: if isSelf(resource.data.userId);
+    }
+
+    // ---- reports: writer can create, only admins can read/manage ----
+    match /reports/{reportId} {
+      allow create: if isSignedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow read, update: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,168 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+@theme {
+  /* ---- Rider's Hub design tokens ---- */
+  --color-asphalt-950: #0a0b0d;
+  --color-asphalt-900: #111318;
+  --color-asphalt-800: #181b21;
+  --color-asphalt-700: #1f232b;
+  --color-asphalt-600: #2a2f3a;
+  --color-asphalt-500: #3a404d;
+  --color-asphalt-400: #565e6e;
+  --color-asphalt-300: #7c8494;
+  --color-asphalt-200: #aeb4c0;
+  --color-asphalt-100: #e4e6ea;
+
+  --color-ember-500: #ff4d1c;
+  --color-ember-400: #ff6a3d;
+  --color-ember-600: #e63e10;
+  --color-ember-glow: #ff7a4a;
+
+  --color-gps-400: #21e6c1;
+  --color-gps-500: #0fd6b0;
+  --color-gps-glow: #4dfbe0;
+
+  --color-signal-red: #ff3b5c;
+  --color-signal-amber: #ffb020;
+  --color-signal-green: #35e08a;
+
+  --font-display: 'Rajdhani', 'Inter', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-asphalt-950);
+  color: var(--color-asphalt-100);
+  font-family: var(--font-body);
+  overscroll-behavior: none;
+}
+
+::-webkit-scrollbar { width: 0; height: 0; }
+
+.font-display { font-family: var(--font-display); }
+.font-mono { font-family: var(--font-mono); }
+
+/* ---- Signature: GPS pulse ring, used on rider markers & live-tracking cues ---- */
+@keyframes gps-pulse {
+  0% { transform: scale(0.6); opacity: 0.55; }
+  70% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.gps-pulse::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--color-gps-400);
+  animation: gps-pulse 2.2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+/* Google Maps-style blue "my location" pulse (distinct from the app's teal GPS accent) */
+.gps-pulse-blue::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: #4285f4;
+  animation: gps-pulse 2.2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+.gps-pulse-ember::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--color-ember-500);
+  animation: gps-pulse 2.2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+@keyframes ember-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 28, 0.45); }
+  50% { box-shadow: 0 0 0 10px rgba(255, 77, 28, 0); }
+}
+.ember-pulse { animation: ember-pulse 1.8s ease-in-out infinite; }
+
+@keyframes route-draw {
+  from { stroke-dashoffset: var(--path-length, 1000); }
+  to { stroke-dashoffset: 0; }
+}
+.route-draw {
+  stroke-dasharray: var(--path-length, 1000);
+  animation: route-draw 1.8s ease forwards;
+}
+
+@keyframes rise-fade {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise-fade { animation: rise-fade 0.4s ease both; }
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--color-asphalt-800) 0%, var(--color-asphalt-700) 50%, var(--color-asphalt-800) 100%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+.glass {
+  background: rgba(24, 27, 33, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Leaflet custom marker icons: strip Leaflet's default divIcon chrome so our
+   own SVG/React marker graphics render cleanly on the real map tiles. */
+.rh-leaflet-marker {
+  background: transparent !important;
+  border: none !important;
+}
+.leaflet-container {
+  /* Leaflet's panes/controls use z-index 400-1000. Without their own stacking
+     context they paint ABOVE our overlay buttons/chips (z-30/z-40), which is
+     what made the map buttons "disappear". Isolate the map so its internal
+     z-indexes can never escape. */
+  isolation: isolate;
+  z-index: 0;
+  background: var(--color-asphalt-900) !important;
+  font-family: var(--font-body) !important;
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--color-asphalt-800) !important;
+  color: var(--color-asphalt-100) !important;
+}
+.leaflet-popup-content {
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+}
+.leaflet-control-attribution {
+  background: rgba(10, 11, 13, 0.65) !important;
+  color: var(--color-asphalt-300) !important;
+  font-size: 0.62rem !important;
+}
+.leaflet-control-attribution a {
+  color: var(--color-asphalt-200) !important;
+}
+
+/* Rider pointer: smooth heading rotation */
+.rh-pointer-rot {
+  transition: transform 0.35s linear;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
